@@ -1,0 +1,133 @@
+---------------------------------------------------------------------------------------
+Differential Compound Prioritization via Bi-Directional Selectivity Push with Power
+Last modify: 06/18/2017
+Author: Junfeng Liu
+---------------------------------------------------------------------------------------
+
+
+--------------------------------------------
+General information
+--------------------------------------------
+	This code provides the learning and predicting functions for the usage of 
+	"Differential Compound Prioritization via Bi-Directional Selectivity Push with Power".
+	
+
+
+--------------------------------------------
+Iuput file
+--------------------------------------------
+	There are three parts of required input file in order to train a ranking model:
+		1). individual bioassay files, plus corresponding selective indicator files to indicate which compounds are selective;
+		2). a file that contains all of the compound-target information;
+		3). a file that contains the dataset information, including the paths to bioassays, paths to baseline models, etc.
+
+	The formats of each kind of files is as follows:
+		1). - Bioassay files:
+			- Each bioassay is stored in a individual file.
+			- Each row in the file represents a compound in the bioassay, with each field separated by a space.
+			- The 1st filed has the ranking score, represented by integers or floating numbers. A higher ranking score indicates that such compound should be ranked higher. Thus please do NOT directly use the IC50 values of compounds. 
+			- The 2nd filed has the query ID. The query ID field is expressed as "qid:xxx", where "xxx" is the bioassay ID.
+			- The rest of fields represent the compound fingerprints/features. The feature of a compound is represented in a "dimension:value" group sparse format, where the "dimension" and "value" are separated by a colon ":", and each "dimension:value" group is separated by a space. The "dimension" should be an integer. The "value" could be either a integer or a floating number.
+			- Example: a bioassay has 3 compounds and its bioassay ID is "BID123". The input file for this bioassay has the following three lines in the quotation marks:
+				"3 qid:BID123 1:1 2:1 3:1 4:1"
+				"2 qid:BID123 1:1 5:1 6:1"
+				"1 qid:BID123 4:1 5:1 6:1 7:1 8:1"
+
+		    - Selectice indicator files:
+			- Each bioassay has a individual selective indicator file.
+			- Each row in the file represents a compound in the bioassay, with each field separated by a space. The order of compounds in the selective indicator files should be consistent to the order of compounds in the corresponding bioassay file.
+			- The 1st field indicates if the compound is selective in the bioassay. If yes, the 1st field is "1", otherwise "0".
+			- The 2nd field indicates if the compound is x-selective in the bioassay (i.e., selective in another bioassay). If yes, the 2nd field is "1", otherwise "0".
+			- The 3rd field indicates the compounds ID.
+
+
+		2). - Compound-target information file:
+			- The compound-target information file is a single file contains all the known compoundn information for each target. 
+			- Each row in the file represents a compound-target pair, which means the compound appears in the target's training file.
+			- The compound-target information file is used to narrow down the search scope when finding the push weights for selective/x-selective compounds.
+			- Example: suppose we have 2 bioassays in total, and their IDs are "BID1" and "BID2". "BID1" has three compounds: "CID1", "CID2" and "CID3". "BID2" has three compounds: "CID1", "CID3" and "CID4". The compound-target information file has following 6 lines in the quotation marks:
+				"BID1 CID1"
+				"BID1 CID2"
+				"BID1 CID3"
+				"BID2 CID1"
+				"BID2 CID3"
+				"BID2 CID4"
+			
+		3). - Dataset information file:
+			- The Dataset information file contains the paths to all files in the bioassay space and paths to the baseline models of participating bioassays.
+			- Each row in the files represents one bioassay in the bioassay space, with each field separated by a space.
+			- The 1st field has the bioassay ID. 
+			- The 2nd filed has the path to the corresponding bioassay file.
+			- The 3rd field has the path to the corresponding selective indicator file.
+			- The 4th field has the path to the baseline models, which would be used to determine the selectivity push weights. In order to get baseline models, please see the instructions on http://cs.iupui.edu/~liujunf/projects/selRank_2017/. 
+			- The 5th field has the maximum dimension of compounds in the the correponding bioassay.
+			- Example: using the example from the compound-target information file, we further assume that, in BID1, CID3 has the most dimensions in its feature vector of 7 among CID1, CID2, and CID3; and in BID2, CID4 has the most dimensions in its feature vector of 9 among CID1, CID3, CID4. The corresponding dataset information file has the following 2 lines in the quotation marks:
+				"BID1 path_to_BID1_train_file path_to_BID1_indicator_file path_to_BID1_baseline_model 7"
+				"BID2 path_to_BID2_train_file path_to_BID2_indicator_file path_to_BID2_baseline_model 9"
+
+
+--------------------------------------------
+Usage
+--------------------------------------------
+	Please download all files from the code directory (http://cs.iupui.edu/~liujunf/projects/selRank_2017/code/).
+	The file train.py trains a dCPPP ranking model with the input files and necessary parameters provided. 
+	The file pred.py takes a ranking model and a testing file* as input to predict the ranking position of the compounds in the testing file.
+
+	* Please make sure that the feature of testing compounds and training compounds are in the same feature space. 
+
+	- Train a model:
+		- Command:
+			python train.py [-parameter_name parameter]
+
+		- Parameters: all parameters are required unless stated. The parameters include:
+			- bioassay_list_file: (string) path to bioassay list file (i.e., the dataset information file explained above).
+			- bioassay_comp_file: (string) path to assay comp file (i.e., the compound-target information file explained above).
+			- bioassay_id: (string) target bioassay ID to train the ranking model.
+			- alpha: (float) push-up weight of selective compounds (alpha in objective function).
+			- beta: (float) push-down weight of x-selective compounds (beta in objective function).
+                        - theta_plus: (string) scale factor to adjust push-up weight of selective compounds (theta^{uparrow} in the objective function).
+                        - XI_plus: (string) push-up threshold parameter for selective compounds (xi^{uparrow} in the objective function).
+                        - theta_minus: (string) scale factor to adjust push-down weight of x-selective compounds (theta^{downarrow} in the objective function).
+                        - XI_minus: (string) push-down threshold parameter for x-selective compounds (xi^{downarrow} in the objective function).
+			- lrate: (float) learning rate in gradient descent optimization.
+			- epsilon: (float) early stop criterion. If the change of loss is less than epsilon, optimization will stop.
+			- max_iter: (int) maximum number of iteration if loss is not converged.
+			- model_file: (string) path to output the ranking model file.
+			- matrix_format: (string) input file format: 'dense' -- dense input matrix, 'sparse' -- sparse input matrix.
+			- loss_file: (string, optional) path to loss file. The loss of each gradient descent step will be saved in this file.
+
+		- Example: suppose we are training the dCPPP model for bioassay 12268 with specific parameters, the command is:
+			python train.py -bioassay_list_file bioassay_list_file_name.txt -bioassay_comp_file bioassay_comp_file_name.txt -bioassay_id 12268 -alpha 0.6 beta 0.2 -theta_plus 0.5 -XI_plus 1.0 -theta_minus 0.5 -XI_minus 1.0 -lrate 0.01 -epsilon 0.001 -max_iter 200 -model_file model_file_name.txt -matrix_format dense -loss_file loss_file_name.txt
+
+
+	- Make a prediction:
+		- Command:
+			python pred.py [-parameter_name parameter]
+			
+		- Parameters: all parameters are required. The parameters include:
+			- dimension: (int) feature dimension**.
+			- model_file: (string) path to the ranking model.
+			- test_feature_file: (string) path to testing feature file***.
+			- pred_file: (string) path to output prediction file on testing set.
+			- matrix_format: (string) input testing file format: 'dense' -- dense input matrix, 'sparse' -- sparse input matrix.
+
+			**  Please make sure that the feature of testing compounds and training compounds are in the same feature space.
+			*** Testing feature file should have the exact format as the training feature file. As for the unknown ranking scores of testing compounds, simply replace them by any arbitrary numbers, since this part will not be used in the prediction.
+
+		- Example: suppose we are predicting the ranking scores of a set of testing compounds with the model trained from the above step, the command is:
+			python pred.py -dimension 360 -model_file model_file_name.txt -test_feature_file test_file_name.txt -pred_file pred_file_name.txt -matrix_format dense
+
+--------------------------------------------
+Comments and Bug Reports
+--------------------------------------------
+Any kind of comments, suggestions, or bug reports are welcome and appreciated. 
+Please feel free to contact the author: liujunf AT iupui DOT edu.
+
+
+
+
+
+
+
+
+
